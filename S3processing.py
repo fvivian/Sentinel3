@@ -51,13 +51,15 @@ class OLCIprocessing:
         print('Importing %i bands took %f seconds.' %(NumBand, end-start))
 
         # open the coordinate NetCDF:
-        global longitude, latitude
 
         coords = self.prodName + 'geo_coordinates.nc'
         f_co = Dataset(coords, mode='r')
         self.lons = f_co.variables['longitude'][:]
         self.lats = f_co.variables['latitude'][:]
         f_co.close()
+        
+        if self.lats.max() > 75:
+            print('The image contains regions north of 75 degrees north and therefore it is suggested to use the Lambert Azimuthal Equal-Area (laea) projection for better visibility. For that purpose, use the attribute transformCoords to set up the subsequent procedure.')
         
     def importIMG(self, filetype='png'):
         '''imports the red/green/blue values from the .png/.jpeg file from the Sentinel 3 product.
@@ -150,7 +152,8 @@ class OLCIprocessing:
         try:
             proj = self.proj
         except:
-            proj = 'merc'
+            self.proj = 'merc'
+            proj = self.proj
         
         if proj=='merc':
             
@@ -289,6 +292,8 @@ class OLCIprocessing:
         '''Plots the data in a projected view and saves it as a png figure.
         '''
         
+        plt.close('all')
+        
         if TargetDir=='./':
             self.targetDir = './'+self.out
         else:
@@ -319,8 +324,8 @@ class OLCIprocessing:
         extent = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
 
         plt.axis('off')
-        cd = self.basemap.pcolormesh(self.xCorners, self.yCorners, rgb0[1,:,:], color=color_tuple, linewidth=0)
-        cd.set_array(None)
+        self.cm = self.basemap.pcolormesh(self.xCorners, self.yCorners, rgb0[1,:,:], color=color_tuple, linewidth=0)
+        self.cm.set_array(None)
 
         plt.savefig(self.out+'.png', transparent=True, bbox_inches=extent)
         plt.close('all')
@@ -375,19 +380,20 @@ class OLCIprocessing:
         #center = [0, 0]
         zoom = 4
 
-        if self.proj=='merc':
-            M=Map(center=center, zoom=zoom)
+
         if self.proj=='laea':
             tls = TileLayer(opacity=1.0,
-                                       url='https://{s}.tiles.arcticconnect.org/osm_3575/{z}/{x}/{y}.png',
-                                       zoom=0,
-                                       max_zoom=10,
-                                       attribution='Map data (c) <a href="https://webmap.arcticconnect.org/">ArcticConnect</a> . Data (c) <a href="http://osm.org/copyright">OoenStreetMap</a>')
+                                        url='https://{s}.tiles.arcticconnect.org/osm_3575/{z}/{x}/{y}.png',
+                                        zoom=0,
+                                        max_zoom=10,
+                                        attribution='Map data (c) <a href="https://webmap.arcticconnect.org/">ArcticConnect</a> . Data (c) <a href="http://osm.org/copyright">OpenStreetMap</a>')
             M=Map(default_tiles=tls, center=center, zoom=zoom)
+        else:
+            M=Map(center=center, zoom=zoom)
 
         ##### PLOT THE PRODUCT ON TOP OF THE MAP WITH ImageOverlay
 
-        imgName = self.out+'.png'
+        imgName = 'http://localhost:8888/files/Python/S3_Mercator/'+self.out+'.png'
 
         try:
             img_bounds = [self.bottomleft, self.topright]
@@ -399,3 +405,56 @@ class OLCIprocessing:
 
         return M
     
+    def mapPlot(self, array=None):
+        
+        if self.proj=='laea':
+
+            self.basemap.drawmapboundary()
+            self.basemap.drawcoastlines()
+            self.basemap.drawparallels(np.arange(-80.,81.,20.))
+            self.basemap.drawmeridians(np.arange(-180.,181.,20.))
+        
+            try:
+                rgb0 = np.ma.array(np.empty(self.rgbscaled.shape),
+                                   mask=self.rgbscaled.mask.copy)
+                rgb0[0] = array[:,:,0]
+                rgb0[1] = array[:,:,1]
+                rgb0[2] = array[:,:,2]
+                rgb0[3] = array[:,:,3]
+                rgb = rgb0.T
+            except:
+                rgb0 = self.rgbscaled
+                rgb = self.rgbscaled.T
+
+            color_tuple = rgb.transpose((1,0,2)).reshape((rgb.shape[0]*rgb.shape[1],rgb.shape[2]))/np.max(rgb0)
+            self.cm = self.basemap.pcolormesh(self.xCorners, self.yCorners, self.rgbscaled[2,:,:], color=color_tuple, linewidth=0)
+            self.cm.set_array(None)
+
+            plt.show()
+            
+        else:
+
+            self.basemap.drawmapboundary()
+            self.basemap.drawcoastlines()
+            self.basemap.drawparallels(np.arange(-80.,81.,20.))
+            self.basemap.drawmeridians(np.arange(-180.,181.,20.))
+        
+            try:
+                rgb0 = np.ma.array(np.empty(self.rgbscaled.shape),
+                                   mask=self.rgbscaled.mask.copy)
+                rgb0[0] = array[:,:,0]
+                rgb0[1] = array[:,:,1]
+                rgb0[2] = array[:,:,2]
+                rgb0[3] = array[:,:,3]
+                rgb = rgb0.T
+            except:
+                rgb0 = self.rgbscaled
+                rgb = self.rgbscaled.T
+
+            color_tuple = rgb.transpose((1,0,2)).reshape((rgb.shape[0]*rgb.shape[1],rgb.shape[2]))/np.max(rgb0)
+            self.cm = self.basemap.pcolormesh(self.xCorners, self.yCorners, self.rgbscaled[2,:,:], color=color_tuple, linewidth=0)
+            self.cm.set_array(None)
+
+            plt.show()
+            plt.close('all')
+        
