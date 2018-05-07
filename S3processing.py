@@ -2,9 +2,8 @@
 import numpy as np
 from netCDF4 import Dataset
 import time
-from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
-#from __future__ import print_function
+from mpl_toolkits.basemap import Basemap
 from ipyleaflet import Map, ImageOverlay, Marker, TileLayer
 import os
 from pyproj import Proj, transform
@@ -14,9 +13,8 @@ hv.notebook_extension()
 class OLCIprocessing:
     
     def __init__(self, ProductName, OutputName=True):
-	'''ProductName;		contains the path to the Sentinel-3 product that is being processed/of interest.
-		OutputName;	will be the name of the later on generated png file. If set to True, this function will set this variable to 'S3A_' followed by the date and time of the products retrieval.
-	'''
+        '''ProductName; contains the path to the Sentinel-3 product that is being processed/of interest.
+            OutputName; will be the name of the later on generated png file. If set to True, this function will set this variable to 'S3A_' followed by the date and time of the products retrieval.'''
         
         self.prodName = ProductName
 
@@ -29,7 +27,7 @@ class OLCIprocessing:
     def importNetCDF(self, NumBand=21):
         '''
         This function imports the variables (radiance and coordinates) of a Sentinel-3 OLCI EFR Product
-	NumBand;	The number of bands that want to be imported. Currently just increasing band numbers are supported, i.e. if NumBand is set to 13, the band Oa01 - Oa13 are imported. Note: CalcRGB method requires the first 10 bands.
+        NumBand; The number of bands that want to be imported. Currently just increasing band numbers are supported, i.e. if NumBand is set to 13, the band Oa01 - Oa13 are imported. Note: CalcRGB method requires the first 10 bands.
         '''
     
         bandNumber = np.asarray(range(1,NumBand+1))
@@ -73,6 +71,8 @@ class OLCIprocessing:
         
         
     def calcRGB(self, method='bands357'):
+        
+        self.calcMethod = method
         
         if method == 'bands357':
             '''uses the bands number 3 (blue), 5 (green), and 7 (red)'''
@@ -165,7 +165,7 @@ class OLCIprocessing:
                                    urcrnrlat=np.max(latCorners), 
                                    llcrnrlon=np.min(lonCorners), 
                                    urcrnrlon=np.max(lonCorners), 
-                                   resolution='c')
+                                   resolution='i')
             
         if proj=='laea':
 
@@ -239,8 +239,17 @@ class OLCIprocessing:
         dmap = hv.DynamicMap(self.clip, kdims=['lower', 'upper'])
     
         n = 15
-        upper_limit = np.linspace(80, 220, num=n)
-        lower_limit = np.linspace(0, 14, num=n)
+        if self.calcMethod == 'log':
+            max09 = 0.9*self.rgbscaled.max()
+            max01 = 0.1*self.rgbscaled.max()
+            upper_limit = np.linspace(max09, self.rgbscaled.max(), num=n)
+            lower_limit = np.linspace(0, max01, num=n)
+        else:
+            upper_limit = np.linspace(np.percentile(self.rgbscaled.flatten(), 50),
+                                      np.percentile(self.rgbscaled.flatten(), 95), num=n)
+            lower_limit = np.linspace(np.percentile(self.rgbscaled.flatten(), 0),
+                                      np.percentile(self.rgbscaled.flatten(), 50), num=n)
+            
 
         return dmap.redim.values(lower=lower_limit, upper=upper_limit)
 
@@ -252,9 +261,9 @@ class OLCIprocessing:
                                               mask=self.rgbscaled.mask.copy)
         image_array = np.ma.masked_array(np.empty(self.rgbscaled.shape),
                                          mask=self.rgbscaled.mask.copy)
-        print image_array_clip.shape
+      
         image_array_clip[:3,:,:] = np.clip(self.rgbscaled.data[:3,:,:], lower_lim, upper_lim)
-                
+    
         image_array[:3,:,:] = self.array_normalisation(image_array_clip.data[:3,:,:])
         image_array.data[-1] = self.rgbscaled.data[-1]
         image_array.mask = self.rgbscaled.mask
@@ -324,6 +333,9 @@ class OLCIprocessing:
         extent = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
 
         plt.axis('off')
+        if self.basemap is not None:
+            self.createBasemap()
+            
         self.cm = self.basemap.pcolormesh(self.xCorners, self.yCorners, rgb0[1,:,:], color=color_tuple, linewidth=0)
         self.cm.set_array(None)
 
@@ -393,7 +405,7 @@ class OLCIprocessing:
 
         ##### PLOT THE PRODUCT ON TOP OF THE MAP WITH ImageOverlay
 
-        imgName = 'http://localhost:8888/files/Python/S3_Mercator/'+self.out+'.png'
+        imgName = self.out+'.png'
 
         try:
             img_bounds = [self.bottomleft, self.topright]
@@ -427,7 +439,11 @@ class OLCIprocessing:
                 rgb = self.rgbscaled.T
 
             color_tuple = rgb.transpose((1,0,2)).reshape((rgb.shape[0]*rgb.shape[1],rgb.shape[2]))/np.max(rgb0)
-            self.cm = self.basemap.pcolormesh(self.xCorners, self.yCorners, self.rgbscaled[2,:,:], color=color_tuple, linewidth=0)
+            self.cm = self.basemap.pcolormesh(self.xCorners,
+                                              self.yCorners,
+                                              self.rgbscaled[2,:,:],
+                                              color=color_tuple,
+                                              linewidth=0)
             self.cm.set_array(None)
 
             plt.show()
@@ -452,7 +468,11 @@ class OLCIprocessing:
                 rgb = self.rgbscaled.T
 
             color_tuple = rgb.transpose((1,0,2)).reshape((rgb.shape[0]*rgb.shape[1],rgb.shape[2]))/np.max(rgb0)
-            self.cm = self.basemap.pcolormesh(self.xCorners, self.yCorners, self.rgbscaled[2,:,:], color=color_tuple, linewidth=0)
+            self.cm = self.basemap.pcolormesh(self.xCorners,
+                                              self.yCorners,
+                                              self.rgbscaled[2,:,:],
+                                              color=color_tuple,
+                                              linewidth=0)
             self.cm.set_array(None)
 
             plt.show()
