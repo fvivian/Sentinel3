@@ -165,7 +165,7 @@ class OLCIprocessing:
                                    urcrnrlat=np.max(latCorners), 
                                    llcrnrlon=np.min(lonCorners), 
                                    urcrnrlon=np.max(lonCorners), 
-                                   resolution='i')
+                                   resolution='c')
             
         if proj=='laea':
 
@@ -183,7 +183,7 @@ class OLCIprocessing:
                                    #lat_ts=80,
                                    lat_0=90,
                                    lon_0=10,
-                                   resolution='i')
+                                   resolution='c')
 
         self.xCorners, self.yCorners = self.basemap(lonCorners, latCorners)
 
